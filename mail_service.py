@@ -7,6 +7,10 @@ import smtplib
 import time
 from email.header import make_header, decode_header
 from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
+from email.utils import formataddr
+from email.mime.text import MIMEText
 from typing import Optional, List
 
 from dotenv import load_dotenv
@@ -41,7 +45,7 @@ SEND_INTERVAL_SECONDS = 1
 
 # QQ 邮箱 SMTP / IMAP 配置（写死在代码中：你说 .env 暂时不需要这些）
 SMTP_HOST = "smtp.qq.com"
-SMTP_PORT = 465  # SSL
+SMTP_PORT = 587
 
 IMAP_HOST = "imap.qq.com"
 IMAP_PORT = 993  # SSL
@@ -58,7 +62,7 @@ def send_email_to_recipients(
     recipients: List[str],
 ):
     """
-    使用 QQ SMTP 向 recipients 列表中的收件人逐个发送邮件。
+    使用 QQ SMTP (smtp.qq.com:587 + STARTTLS) 向 recipients 列表中的收件人逐个发送邮件。
     每个收件人之间间隔 SEND_INTERVAL_SECONDS 秒。
 
     返回一个结果列表，每个元素形如：
@@ -66,29 +70,56 @@ def send_email_to_recipients(
     """
     results = []
 
-    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+    # 建立 SMTP 连接（非 SSL，后面用 STARTTLS）
+    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+    # 如果你不想看 debug，可以注释掉下一行
+    # server.set_debuglevel(1)
+
+    try:
+        # 发送 EHLO
+        server.ehlo()
+
+        # 启动 TLS 加密
+        if server.has_extn("STARTTLS"):
+            server.starttls()
+            server.ehlo()  # 启动 TLS 后建议再 EHLO 一次
+
+        # 登录 QQ 邮箱
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
 
+        # 逐个收件人发送
         for idx, to_addr in enumerate(recipients):
-            msg = build_email_message(
-                subject=subject,
-                text_content=text_content,
-                html_content=html_content,
-                from_name=from_name,
-                to_addr=to_addr,
-            )
+            # 构建一封带 text/html 的 MIMEMultipart 邮件
+            msg = MIMEMultipart("alternative")
+
+            # From: "名称 <邮箱地址>"
+            msg["From"] = formataddr((from_name, EMAIL_FROM))
+            msg["To"] = to_addr
+            msg["Subject"] = Header(subject, "utf-8")
+
+            # 纯文本部分
+            if text_content:
+                text_part = MIMEText(text_content, "plain", "utf-8")
+                msg.attach(text_part)
+
+            # HTML 部分（可选）
+            if html_content:
+                html_part = MIMEText(html_content, "html", "utf-8")
+                msg.attach(html_part)
 
             try:
-                server.send_message(msg)
+                server.sendmail(EMAIL_FROM, [to_addr], msg.as_string())
                 ok = True
                 err_msg = ""
-                send_logger.info("SUCCESS to=%s subject=%s", to_addr, subject)
+                if "send_logger" in globals() and send_logger:
+                    send_logger.info("SUCCESS to=%s subject=%s", to_addr, subject)
             except Exception as e:
                 ok = False
                 err_msg = repr(e)
-                send_logger.error(
-                    "FAIL to=%s subject=%s error=%s", to_addr, subject, err_msg
-                )
+                if "send_logger" in globals() and send_logger:
+                    send_logger.error(
+                        "FAIL to=%s subject=%s error=%s", to_addr, subject, err_msg
+                    )
 
             results.append(
                 {
@@ -98,9 +129,14 @@ def send_email_to_recipients(
                 }
             )
 
-            # 对列表中的每个收件人进行简单速率限制
             if idx != len(recipients) - 1:
                 time.sleep(SEND_INTERVAL_SECONDS)
+
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
 
     return results
 
