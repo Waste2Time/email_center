@@ -37,21 +37,7 @@ from dotenv import load_dotenv
 
 from mail_service import send_email_to_recipients, imap_command_loop
 
-# ==============================
-#  环境变量 & 基本配置
-# ==============================
 
-ENV_PATH = os.path.expanduser("./.env")
-load_dotenv(ENV_PATH)
-
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # QQ 邮箱授权码
-API_KEY = os.getenv("API_KEY")
-
-if not EMAIL_FROM or not EMAIL_PASSWORD or not API_KEY:
-    raise RuntimeError(
-        f"EMAIL_FROM / EMAIL_PASSWORD / API_KEY 未在 {ENV_PATH} 中正确配置"
-    )
 
 # HTTP 服务配置
 LISTEN_HOST = "0.0.0.0"

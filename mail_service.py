@@ -1,14 +1,37 @@
 import email
 import imaplib
 import json
+import logging
+import os
 import smtplib
 import time
 from email.header import make_header, decode_header
 from email.message import EmailMessage
 from typing import Optional, List
 
+from dotenv import load_dotenv
+
 from command_processor import parse_command, handle_command
-from mail_gateway import  EMAIL_FROM, EMAIL_PASSWORD, send_logger, request_logger
+
+# ==============================
+#  环境变量 & 基本配置
+# ==============================
+
+ENV_PATH = os.path.expanduser("./.env")
+load_dotenv(ENV_PATH)
+
+EMAIL_FROM = os.getenv("EMAIL_FROM")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # QQ 邮箱授权码
+API_KEY = os.getenv("API_KEY")
+
+send_logger = logging.getLogger("send_logger")
+request_logger = logging.getLogger("request_logger")
+
+
+if not EMAIL_FROM or not EMAIL_PASSWORD or not API_KEY:
+    raise RuntimeError(
+        f"EMAIL_FROM / EMAIL_PASSWORD / API_KEY 未在 {ENV_PATH} 中正确配置"
+    )
 
 # IMAP 轮询间隔（秒）：为避免触发风控，建议 >= 30 秒
 IMAP_POLL_INTERVAL_SECONDS = 30
