@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 
 from mail_service import send_email_to_recipients, imap_command_loop
 
-
+API_KEY = os.getenv("API_KEY")
 
 # HTTP 服务配置
 LISTEN_HOST = "0.0.0.0"
